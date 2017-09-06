@@ -22,7 +22,7 @@ model_weights_output = os.path.join(data_path, 'DNN.model')
 def gen_data():
     with open(data_file, 'w') as fp:
         fp.write('sold\tclick\ttbsold' + os.linesep)
-        y = np.random.rand(200)
+        y = np.random.rand(200) * 3.78
         x1 = np.sin(y)
         x2 = np.random.standard_normal(200)
         y.reshape(-1)
@@ -31,7 +31,7 @@ def gen_data():
         for i in range(y.shape[0]):
             fp.write('%f\t%f\t%f%s' % (y[i], x1[i], x2[i], os.linesep))
         fp.flush()
-# gen_data()
+gen_data()
 
 data_frame = pandas.read_table(data_file, delim_whitespace=True, header='infer')
 lasso = Lasso(alpha=1)
