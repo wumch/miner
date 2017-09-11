@@ -11,14 +11,6 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import Lasso
 
 
-data_path = os.path.join(
-    os.path.dirname(
-        os.path.dirname(os.path.dirname(__file__))), 'data')
-# data_file = os.path.join(data_path, '57_0811-0821-sold-tbsold-rate.ssv')
-data_file = os.path.join(data_path, 'generated.ssv')
-model_weights_output = os.path.join(data_path, 'DNN.model')
-
-
 def gen_data():
     with open(data_file, 'w') as fp:
         fp.write('sold\tclick\ttbsold' + os.linesep)
@@ -31,32 +23,40 @@ def gen_data():
         for i in range(y.shape[0]):
             fp.write('%f\t%f\t%f%s' % (y[i], x1[i], x2[i], os.linesep))
         fp.flush()
-gen_data()
+# gen_data()
+
+
+data_path = os.path.join(
+    os.path.dirname(
+        os.path.dirname(os.path.dirname(__file__))), 'data')
+data_file = os.path.join(data_path, 't121_ctr_tbsold.tsv')
+model_weights_output = os.path.join(data_path, 't121_ctr_tbsold.model')
 
 data_frame = pandas.read_table(data_file, delim_whitespace=True, header='infer')
 lasso = Lasso(alpha=1)
-lasso.fit(data_frame.iloc[:, 1:3], data_frame['sold'])
+lasso.fit(data_frame.iloc[:, [5, 6]], data_frame['ctr'])
 print(os.linesep, '<Lasso>.coef: ', lasso.coef_)
 
 dataset = data_frame.values
-data_input = dataset[:, 1:3]
+train_size = 7000
+data_input = dataset[:, [5, 6]]
 data_output = dataset[:, 0].reshape(-1, 1)
 data_input = StandardScaler().fit(data_input).transform(data_input)
 data_output = StandardScaler().fit(data_output).transform(data_output)
-train_input = data_input[0:180, :]
-train_output = data_output[0:180, :]
-test_input = data_input[180:, :]
-test_output = data_output[180:, :]
+train_input = data_input[0:train_size, :]
+train_output = data_output[0:train_size, :]
+test_input = data_input[train_size:, :]
+test_output = data_output[train_size:, :]
 
 
 def build_model():
     model = Sequential()
-    model.add(Dense(5, input_dim=2))
+    model.add(Dense(50, input_dim=2))
     model.add(Activation('relu'))
-    model.add(Dense(3))
+    model.add(Dense(30))
     model.add(Activation('relu'))
     model.add(Dense(1))
-    # model.add(Activation('linear'))
+    model.add(Activation('linear'))
     optimizer = adam(lr=0.001)
     model.compile(optimizer=optimizer, loss='mean_squared_error')
     return model
@@ -65,7 +65,8 @@ random_seed = 2
 np.random.seed(random_seed)
 
 model = build_model()
-model.fit(train_input, train_output, batch_size=10, epochs=200, verbose=0, validation_split=0.3)
+model.fit(train_input, train_output, batch_size=10, epochs=200, verbose=0, validation_split=0.2)
+model.save_weights(model_weights_output)
 predict = model.predict(test_input, batch_size=1)
 print(test_output.reshape(1, -1)[0])
 print(predict.reshape(1, -1)[0])
