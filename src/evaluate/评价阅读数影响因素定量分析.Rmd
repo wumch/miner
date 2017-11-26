@@ -34,7 +34,7 @@ db_con <- dbConnect(MySQL(), host="localhost", dbname="evaluate", user="root", p
 
 ## 对大量商品的统计分析
 
-从所有商品下随机抽取 100000 条评价做分析：  
+从所有商品下随机抽取 100000 条评价，以*read_score*为拟合目标：
 
 ```{r comments_overall, include=TRUE, warning=FALSE, message=FALSE, echo=FALSE}
 comments.sql <- "
@@ -79,7 +79,7 @@ rpart.plot(model, type=1, digits=4)
 
 ## 对单个商品的统计分析
 
-从 https://item.taobao.com/item.htm?id=555786640442 下抽取前600条评价做分析：  
+从 https://item.taobao.com/item.htm?id=555786640442 下抽取前600条评价，以*read_num*为拟合目标：
 
 ```{r comments_single, include=TRUE, warning=FALSE, message=FALSE, echo=FALSE}
 comments.sql <- "
