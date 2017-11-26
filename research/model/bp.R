@@ -16,7 +16,7 @@ pred <- compute(model, splited$remain[, c('paid', 'price', 'coupon_price', 'prof
 ctr.min <- min(samples$ctr)
 ctr.norm <- max(samples$ctr) - ctr.min
 pred.unnormed <- pred$net.result * ctr.norm + ctr.min
-samples.test.ctr <- splited$remain$ctr * ctr.norm + ctr.min
+samples.test.ctr <- splited$remain$ctr * ctr.norm + ctr.mini
 rownames(pred.unnormed) <- 1:nrow(pred.unnormed)
 MSE <- sum((samples.test.ctr - pred.unnormed[,1]) ^ 2) / length(samples.test.ctr)
 
