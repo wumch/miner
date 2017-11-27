@@ -120,8 +120,14 @@ pred.model.mse <- sum(sqrt((pred.model - comments.test.mean) ** 2)) / length(pre
 rpart.plot(model, type=1, digits=4)
 ```
 
-```{r, include=FALSE, warning=FALSE, message=FALSE, echo=FALSE}
+---
+## 总结与展望
 
+回归结果 p 值过高，统计意义不显著。可以推断：评价文字内容对评价排名影响较大。
+
+此外，统计结果只表明关联关系，需要专家知识才可能得出因果关系；即统计结果对实际操作是否具有指导意义还需要人为判断。
+
+```{r, include=FALSE, warning=FALSE, message=FALSE, echo=FALSE}
 dbClearResult(db_resh)
 dbDisconnect(db_con)
 ```
