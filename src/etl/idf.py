@@ -31,10 +31,12 @@ class Idfer(object):
         self.out.write('%s %f%s' % (word, idf_value, os.linesep))
 
     def _docs(self):
+        opened = False
         if isinstance(self.docs, io.IOBase):
             fp = self.docs
         elif isinstance(self.docs, str):
             fp = open(self.docs, 'r')
+            opened = True
         else:
             return self.docs
         while True:
@@ -42,7 +44,8 @@ class Idfer(object):
             if not doc:
                 break
             yield doc.rstrip()
-        fp.close()
+        if opened:
+            fp.close()
 
     def _feed_doc(self, doc: str):
         for w in set(self._seg(doc)):
