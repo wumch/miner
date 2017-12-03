@@ -64,8 +64,11 @@ class Idfer(object):
 
 
 if __name__ == '__main__':
+    import time
     _root_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-    _docs = os.path.join(_root_path, 'data', 'comments.txt')
-    _outfile = os.path.join(_root_path, 'data', 'comments.idf.txt')
+    _docs = os.path.join(_root_path, 'data', 'title.txt')
+    _outfile = os.path.join(_root_path, 'data', 'title.idf.txt')
     _idfer = Idfer(docs=_docs, output=_outfile)
+    _begin = time.time()
     _idfer.calc()
+    print('done. elapse: %f' % (time.time() - _begin))
