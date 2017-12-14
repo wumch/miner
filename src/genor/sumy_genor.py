@@ -33,13 +33,12 @@ class Genor(object):
 if __name__ == '__main__':
     import sys
     if len(sys.argv) < 2:
-        print('usage: %s [sentence-count] <document>')
+        print('usage: %s [sentence-count] <document>' % sys.argv[0])
         sys.exit(0)
     _sentence_count = 5
     if len(sys.argv) == 3:
         _sentence_count = int(sys.argv[1])
     _doc = sys.argv[-1]
-    print(_sentence_count)
     if os.path.isfile(_doc):
         _doc = open(_doc).read()
     _genor = Genor()
