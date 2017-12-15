@@ -18,8 +18,9 @@ class Genor(object):
 
     def gen(self, text: str, sentence_count: int=3) -> str:
         sentence_list = self._gen(text, sentence_count)
-        return os.linesep.join([str(s) for s in sentence_list]) + os.linesep + \
-            os.linesep + ''.join([str(s) for s in sentence_list])
+        sentence_list = [str(s) for s in sentence_list]
+        return os.linesep.join(sentence_list) + os.linesep + \
+            os.linesep + ''.join(sentence_list)
 
     def _gen(self, text: str, sentence_count: int) -> list:
         parser = PlaintextParser(text=text, tokenizer=self.tokenizer)
