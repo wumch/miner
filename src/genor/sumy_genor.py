@@ -18,7 +18,9 @@ class Genor(object):
 
     def gen(self, text: str, sentence_count: int=3) -> str:
         sentence_list = self._gen(text, sentence_count)
-        return '\n'.join([str(s) for s in sentence_list])
+        sentence_list = [str(s) for s in sentence_list]
+        return os.linesep.join(sentence_list) + os.linesep + \
+            os.linesep + ''.join(sentence_list)
 
     def _gen(self, text: str, sentence_count: int) -> list:
         parser = PlaintextParser(text=text, tokenizer=self.tokenizer)
@@ -33,13 +35,12 @@ class Genor(object):
 if __name__ == '__main__':
     import sys
     if len(sys.argv) < 2:
-        print('usage: %s [sentence-count] <document>')
+        print('usage: %s [sentence-count] <document>' % sys.argv[0])
         sys.exit(0)
     _sentence_count = 5
     if len(sys.argv) == 3:
         _sentence_count = int(sys.argv[1])
     _doc = sys.argv[-1]
-    print(_sentence_count)
     if os.path.isfile(_doc):
         _doc = open(_doc).read()
     _genor = Genor()
