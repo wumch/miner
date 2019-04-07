@@ -24,7 +24,7 @@ class Tokenizer:
         self.punct = {}
         self.vocabulary = {}
         self._voca_idx = 0
-        self.enable_unigram = False
+        self.enable_unigram = True
         self._prepare()
 
     def cut(self, text: str):
