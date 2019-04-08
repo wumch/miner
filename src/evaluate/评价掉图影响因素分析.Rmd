@@ -40,78 +40,45 @@ db_con <- dbConnect(MySQL(), host="59805caa02035.gz.cdb.myqcloud.com", port=5339
 ```{r comments_overall, include=TRUE, warning=FALSE, message=FALSE, echo=FALSE}
 comments.sql <- "
 select
-    is_drop_graph, cast(weixin_num as char), tenant_uid, uid, qq, tbid,
-    tmall, chuping, user_nick, shop_name,
+    is_drop_graph, weixin_num, uid, tbid,
+    tmall, chuping, user_nick, shop_name, chuping_words,
     case category when '视频方向' then 1 else 0 end as `video`,
     if(tenant_uid=0, qq, cast(tenant_uid as char)) as `userid`,
     char_length(img_url) - char_length(replace(img_url, '|', '')) + 1 as `img_num`,
-    char_length(ifnull(content, ifnull(add_content, ''))) as `char_num`, chuping_words,
-    (select count(*) from eva_evaluate s_weixin where s_weixin.qq=m.qq and s_weixin.charge_status in (2,3,4,5) and s_weixin.make_time>'2019-01-01') as `wexin_num`,
-    (select count(*) from eva_evaluate s_tbid where s_tbid.tbid=m.tbid and s_tbid.charge_status in (2,3,4,5) and s_tbid.make_time>'2019-01-01') as `tbid_num`
+    char_length(ifnull(content, ifnull(add_content, ''))) as `char_num`,
+    (select count(*) from eva_evaluate s_weixin where s_weixin.qq=m.qq and s_weixin.charge_status in (2,3,4,5) and s_weixin.make_time>'2019-01-01' and s_weixin.id<=505480) as `wexin_num`,
+    (select count(*) from eva_evaluate s_tbid where s_tbid.tbid=m.tbid and s_tbid.charge_status in (2,3,4,5) and s_tbid.make_time>'2019-01-01' and s_tbid.id<=505480) as `tbid_num`
+from eva_evaluate m
+where id between 503924 and 505480 and charge_status in (2,3,4,5) and taobao_eva_id is not null
+"
+comments.sql <- "
+select
+    is_drop_graph,
+    tmall,
+    case category when '视频方向' then 'yes' else 'no' end as `video`,
+    char_length(img_url) - char_length(replace(img_url, '|', '')) + 1 as `img_num`,
+    char_length(ifnull(content, ifnull(add_content, ''))) as `char_num`,
+    (select count(*) from eva_evaluate s_weixin where s_weixin.qq=m.qq and s_weixin.charge_status in (2,3,4,5) and s_weixin.make_time>'2019-01-01' and s_weixin.id<=505480) as `weixin_num`,
+    (select count(*) from eva_evaluate s_tbid where s_tbid.tbid=m.tbid and s_tbid.charge_status in (2,3,4,5) and s_tbid.make_time>'2019-01-01' and s_tbid.id<=505480) as `tbid_num`
 from eva_evaluate m
 where id between 503924 and 505480 and charge_status in (2,3,4,5) and taobao_eva_id is not null
 "
 db_resh <- dbSendQuery(db_con, comments.sql)
 comments <- dbFetch(db_resh, n=-1)
 
-train.index <- sample(1:nrow(comments), round(nrow(comments) * 0.8))
+train.index <- sample(1:nrow(comments), round(nrow(comments) * 0.9))
 comments.train <- comments[train.index, ]
 comments.test <- comments[-train.index, ]
 
-comments.train.mean <- mean(comments.train$is_drop_graph)
-comments.train.mse <- sum(sqrt((comments.train$is_drop_graph - comments.train.mean) ** 2)) / length(comments.train$is_drop_graph)
-comments.test.mean <- mean(comments.test$is_drop_graph)
-comments.test.mse <- sum(sqrt((comments.test$is_drop_graph - comments.test.mean) ** 2)) / length(comments.test$is_drop_graph)
+#comments.train.mean <- mean(comments.train$is_drop_graph)
+#comments.train.mse <- sum(sqrt((comments.train$is_drop_graph - comments.train.mean) ** 2)) / length(comments.train$is_drop_graph)
+#comments.test.mean <- mean(comments.test$is_drop_graph)
+#comments.test.mse <- sum(sqrt((comments.test$is_drop_graph - comments.test.mean) ** 2)) / length(comments.test$is_drop_graph)
 
 
-model <- rpart(is_drop_graph ~ ., data=comments.train, method="anova")
-pred.model <- predict(model, newdata=comments.test)
-pred.model.mse <- sum(sqrt((pred.model - comments.test.mean) ** 2)) / length(pred.model)
-
-rpart.plot(model, type=1, digits=4)
-```
-
----
-
-## 对单个商品的统计分析
-
-从 https://item.taobao.com/item.htm?id=555786640442 下抽取前600条评价，以*read_num*为拟合目标：
-
-```{r comments_single, include=TRUE, warning=FALSE, message=FALSE, echo=FALSE}
-comments.sql <- "
-select c.read_num as `read_score`,
-    if(c.has_video, 'yes', 'no') as has_video,
-    ifnull(char_length(c.content), 0) as chars, ifnull(char_length(c.content) / cg.avg_chars, 0) as `chars_score`,
-    if(c.content is not null and c.content!='', 'yes', 'no') as has_content,
-    c.pic_num, ifnull(c.pic_num / cg.avg_pic_num, 0) as `pic_score`,
-    if(c.pic_num>0, 'yes', 'no') as has_pic,
-    ifnull(char_length(c.append_content), 0) as a_chars, ifnull(char_length(c.append_content) / cg.avg_append_chars, 0) as `a_chars_score`,
-    if(c.append_content is not null and c.append_content!='', 'yes', 'no') as has_a_content,
-    c.append_pic_num, ifnull(c.append_pic_num / cg.avg_append_pic_num, 0) as `a_pics_score`,
-    if(c.append_pic_num is not null and c.append_pic_num>0, 'yes', 'no') as has_append_pic
-from eva_taobao_comment c
-left join eva_taobao_comment_group cg on cg.tbid=c.tbid
-where c.read_num>0
-    and c.date between '2017-10-01' and '2017-10-31'
-    and c.tbid=555786640442
-order by rand() limit 100000
-"
-db_resh <- dbSendQuery(db_con, comments.sql)
-comments <- dbFetch(db_resh, n=-1)
-
-train.index <- sample(1:nrow(comments), round(nrow(comments) * 0.8))
-comments.train <- comments[train.index, ]
-comments.test <- comments[-train.index, ]
-
-comments.train.mean <- mean(comments.train$read_score)
-comments.train.mse <- sum(sqrt((comments.train$read_score - comments.train.mean) ** 2)) / length(comments.train$read_score)
-comments.test.mean <- mean(comments.test$read_score)
-comments.test.mse <- sum(sqrt((comments.test$read_score - comments.test.mean) ** 2)) / length(comments.test$read_score)
-
-
-model <- rpart(read_score ~ ., data=comments.train, method="anova")
-pred.model <- predict(model, newdata=comments.test)
-pred.model.mse <- sum(sqrt((pred.model - comments.test.mean) ** 2)) / length(pred.model)
+model <- rpart(is_drop_graph ~ video + img_num + char_num + weixin_num + tbid_num, data=comments.train, method="class")
+#pred.model <- predict(model, newdata=comments.test)
+#pred.model.mse <- sum(sqrt((pred.model - comments.test.mean) ** 2)) / length(pred.model)
 
 rpart.plot(model, type=1, digits=4)
 ```
