@@ -5,7 +5,7 @@ library(pROC)
 library(RMySQL)
 set.seed(1)
 
-
+# db_con <- dbConnect(MySQL(), host="59805caa02035.gz.cdb.myqcloud.com", port=5339, dbname="evaluate", user="memuu_dev", password="memuu-dev@2101")
 db_con <- dbConnect(MySQL(), host="localhost", dbname="evaluate", user="root", password="root")
 db_resh <- dbSendQuery(db_con, "
 select c.read_num as `read_score`, 

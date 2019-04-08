@@ -1,0 +1,129 @@
+---
+title: "淘宝评价阅读数影响因素分析"
+author: "吴孟春"
+date: "2017年11月26日"
+documentclass: ctexart
+output: rticles::ctex
+---
+
+```{r setup, include=FALSE, warning=FALSE, message=FALSE, echo=FALSE}
+# library(rpart)
+library(rpart.plot)
+library(pROC)
+library(RMySQL)
+set.seed(1)
+options(warn=-1)
+
+db_con <- dbConnect(MySQL(), host="59805caa02035.gz.cdb.myqcloud.com", port=5339, dbname="evaluate", user="memuu_dev", password="memuu-dev@2101")
+```
+
+## 数据说明
+选取1900多个淘宝商品，每个商品取前2000条评价（截至2017-11-25）。
+
+- `read_num`: 评价阅读量。
+- `read_score`: 评价阅读量 / 所属商品下所有评价的平均阅读量。
+- `pic_num`: 初评图片数量。
+- `pic_score`: 初评图片数量 / 所属商品下所有评价的平均图片数量。
+- `chars`: 初评内容字数。
+- `chars_score`: 初评内容字数 / 所属商品下有内容的初评的平均字量。
+- `has_video`: 评价内容是否包含视频。
+
+以上因子加上前缀 `a_` 表示追评。
+*所有*是指该商品*被采集到*的所有评价。
+
+---
+
+## 对大量商品的统计分析
+
+从所有商品下随机抽取 100000 条评价，以*is_drop_graph*为拟合目标：
+
+```{r comments_overall, include=TRUE, warning=FALSE, message=FALSE, echo=FALSE}
+comments.sql <- "
+select
+    is_drop_graph, cast(weixin_num as char), tenant_uid, uid, qq, tbid,
+    tmall, chuping, user_nick, shop_name,
+    case category when '视频方向' then 1 else 0 end as `video`,
+    if(tenant_uid=0, qq, cast(tenant_uid as char)) as `userid`,
+    char_length(img_url) - char_length(replace(img_url, '|', '')) + 1 as `img_num`,
+    char_length(ifnull(content, ifnull(add_content, ''))) as `char_num`, chuping_words,
+    (select count(*) from eva_evaluate s_weixin where s_weixin.qq=m.qq and s_weixin.charge_status in (2,3,4,5) and s_weixin.make_time>'2019-01-01') as `wexin_num`,
+    (select count(*) from eva_evaluate s_tbid where s_tbid.tbid=m.tbid and s_tbid.charge_status in (2,3,4,5) and s_tbid.make_time>'2019-01-01') as `tbid_num`
+from eva_evaluate m
+where id between 503924 and 505480 and charge_status in (2,3,4,5) and taobao_eva_id is not null
+"
+db_resh <- dbSendQuery(db_con, comments.sql)
+comments <- dbFetch(db_resh, n=-1)
+
+train.index <- sample(1:nrow(comments), round(nrow(comments) * 0.8))
+comments.train <- comments[train.index, ]
+comments.test <- comments[-train.index, ]
+
+comments.train.mean <- mean(comments.train$is_drop_graph)
+comments.train.mse <- sum(sqrt((comments.train$is_drop_graph - comments.train.mean) ** 2)) / length(comments.train$is_drop_graph)
+comments.test.mean <- mean(comments.test$is_drop_graph)
+comments.test.mse <- sum(sqrt((comments.test$is_drop_graph - comments.test.mean) ** 2)) / length(comments.test$is_drop_graph)
+
+
+model <- rpart(is_drop_graph ~ ., data=comments.train, method="anova")
+pred.model <- predict(model, newdata=comments.test)
+pred.model.mse <- sum(sqrt((pred.model - comments.test.mean) ** 2)) / length(pred.model)
+
+rpart.plot(model, type=1, digits=4)
+```
+
+---
+
+## 对单个商品的统计分析
+
+从 https://item.taobao.com/item.htm?id=555786640442 下抽取前600条评价，以*read_num*为拟合目标：
+
+```{r comments_single, include=TRUE, warning=FALSE, message=FALSE, echo=FALSE}
+comments.sql <- "
+select c.read_num as `read_score`,
+    if(c.has_video, 'yes', 'no') as has_video,
+    ifnull(char_length(c.content), 0) as chars, ifnull(char_length(c.content) / cg.avg_chars, 0) as `chars_score`,
+    if(c.content is not null and c.content!='', 'yes', 'no') as has_content,
+    c.pic_num, ifnull(c.pic_num / cg.avg_pic_num, 0) as `pic_score`,
+    if(c.pic_num>0, 'yes', 'no') as has_pic,
+    ifnull(char_length(c.append_content), 0) as a_chars, ifnull(char_length(c.append_content) / cg.avg_append_chars, 0) as `a_chars_score`,
+    if(c.append_content is not null and c.append_content!='', 'yes', 'no') as has_a_content,
+    c.append_pic_num, ifnull(c.append_pic_num / cg.avg_append_pic_num, 0) as `a_pics_score`,
+    if(c.append_pic_num is not null and c.append_pic_num>0, 'yes', 'no') as has_append_pic
+from eva_taobao_comment c
+left join eva_taobao_comment_group cg on cg.tbid=c.tbid
+where c.read_num>0
+    and c.date between '2017-10-01' and '2017-10-31'
+    and c.tbid=555786640442
+order by rand() limit 100000
+"
+db_resh <- dbSendQuery(db_con, comments.sql)
+comments <- dbFetch(db_resh, n=-1)
+
+train.index <- sample(1:nrow(comments), round(nrow(comments) * 0.8))
+comments.train <- comments[train.index, ]
+comments.test <- comments[-train.index, ]
+
+comments.train.mean <- mean(comments.train$read_score)
+comments.train.mse <- sum(sqrt((comments.train$read_score - comments.train.mean) ** 2)) / length(comments.train$read_score)
+comments.test.mean <- mean(comments.test$read_score)
+comments.test.mse <- sum(sqrt((comments.test$read_score - comments.test.mean) ** 2)) / length(comments.test$read_score)
+
+
+model <- rpart(read_score ~ ., data=comments.train, method="anova")
+pred.model <- predict(model, newdata=comments.test)
+pred.model.mse <- sum(sqrt((pred.model - comments.test.mean) ** 2)) / length(pred.model)
+
+rpart.plot(model, type=1, digits=4)
+```
+
+---
+## 总结与展望
+
+回归结果 p 值过高，统计意义不显著。可以推断：评价文字内容对评价排名影响较大。
+
+此外，统计结果只表明关联关系，需要专家知识才可能得出因果关系；即统计结果对实际操作是否具有指导意义还需要人为判断。
+
+```{r, include=FALSE, warning=FALSE, message=FALSE, echo=FALSE}
+dbClearResult(db_resh)
+dbDisconnect(db_con)
+```
