@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.ticker import NullFormatter
 from sklearn import manifold
+from pandas.plotting import radviz
 
 
 class MatBuilder:
