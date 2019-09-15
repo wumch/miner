@@ -26,6 +26,8 @@ theme_set(theme_light() + theme(axis.text.x=element_text(angle=90)))
 # 修改geom_text的字体
 geom_text(family=font_name)
 
+theme_set(theme_light() + theme(text=element_text(family='SimSun'), axis.text.x=element_text(angle=90)))
+
 theme(text=element_text(family=font_name), axis.text.x=element_text(angle = 90))
 # 或者
 theme_bw(base_family=font_name)
