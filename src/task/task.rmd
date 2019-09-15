@@ -1,0 +1,103 @@
+---
+title: "任务系统数据分析"
+author: "吴孟春"
+date: "2019年09月16日"
+documentclass: ctexart
+output: rticles::ctex
+---
+
+```{r setup, include=FALSE, warning=FALSE, message=FALSE, echo=FALSE}
+library(ggplot2)
+library(reshape2)
+library(showtext)
+library(RMySQL)
+
+set.seed(2)
+
+# 中文字体:
+showtext_auto()
+
+font_path <- '/usr/share/fonts/wumch/simsun.ttc'
+font_name <- tools::file_path_sans_ext(basename(font_path))
+font_name <- 'SimSun'
+font.add(font_name, font_path)
+# 修改坐标轴和legend、标题的字体
+theme_set(theme_light() + theme(axis.text.x=element_text(angle=90)))
+# 修改geom_text的字体
+geom_text(family=font_name)
+
+theme(text=element_text(family=font_name), axis.text.x=element_text(angle = 90))
+# 或者
+theme_bw(base_family=font_name)
+# 修改geom_text的字体
+geom_text(family=font_name)
+
+# ssh -gfCN -L3307:10.66.236.238:3306 wumch@119.29.236.246
+db_con <- dbConnect(MySQL(), host="127.0.0.1", port=3307, dbname="evaluate", user="eva_dev", password="memuu@2101")
+```
+
+## 统计趋势
+
+##### 订单量走势
+```{r, include=TRUE, warning=FALSE, message=FALSE, echo=FALSE, dpi=800}
+sql <- "
+select
+    date_format(from_unixtime(ut.join_time), '%m-%d') as `date`,
+    count(*) as `applied`,
+    sum(ut.status=1) as `canceled`,
+    sum(ut.status in (2,3,4)) as `submitted`,
+    sum(ut.status=3) as `done`,
+    sum(ut.status=4) as `rejected`
+from eva_user_task ut
+where join_time is not null and join_time between 1567008000 and unix_timestamp(date_format(now(), '%Y-%m-%d'))-1
+group by date(from_unixtime(ut.join_time))
+"
+db_resh <- dbSendQuery(db_con, sql)
+orders <- dbFetch(db_resh, n=-1)
+orders_flatten <- melt(orders, id="date")
+ggplot(orders_flatten, aes(x=date, y=value, colour=variable, group=variable)) + 
+  geom_line() + 
+  geom_point(size=1) + 
+  labs(y='order count', x='submit date', title='trends of order count', colour='legend') +
+  theme(plot.title=element_text(hjust=0.5), text=element_text(size=11))
+```
+
+##### 参与用户数趋势
+```{r, include=TRUE, warning=FALSE, message=FALSE, echo=FALSE, dpi=400}
+sql <- "
+select
+    date_format(from_unixtime(ut.join_time), '%m-%d') as `日期`,
+    count(distinct user_id) as `报名`,
+    count(distinct if(ut.status=1, user_id, null)) as `取消报名`,
+    count(distinct if(ut.status in (2,3,4), user_id, null)) as `提交`,
+    count(distinct if(ut.status=3, user_id, null)) as `完成`,
+    count(distinct if(ut.status=4, user_id, null)) as `审核未通过`
+from eva_user_task ut
+where join_time is not null and join_time between 1567008000 and unix_timestamp(date_format(now(), '%Y-%m-%d'))-1
+group by date(from_unixtime(ut.join_time))
+"
+db_resh <- dbSendQuery(db_con, sql)
+users <- dbFetch(db_resh, n=-1)
+users_flatten <- melt(users, id="日期")
+ggplot(users_flatten, aes(x=日期, y=value, colour=variable, group=variable)) + 
+  geom_line() + 
+  geom_point(size=1) + 
+  labs(y='用户数', x='报名日期', title='参与用户数趋势', colour='图例') +
+  theme(plot.title=element_text(hjust=0.5), text=element_text(size=12))
+```
+
+##### 报名率影响因素
+
+##### 总结：
+* 提升报名（推送）
+* 取消报名较多
+* 适合用户的任务被淹没
+* 简化任务(手机号、安卓app安装、关注公众号，伪插件机制)
+
+##### 解决方案：
+- 给用户推荐任务
+- 任务发布阶段列出竞争任务
+- 审核阶段确定相似任务
+- 任务定向推送给潜在用户
+- 预测任务完成人数和时间
+- 根据价格预测任务完成人数
