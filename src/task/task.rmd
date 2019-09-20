@@ -6,33 +6,15 @@ documentclass: ctexart
 output: rticles::ctex
 ---
 
-```{r setup, include=FALSE, warning=FALSE, message=FALSE, echo=FALSE}
+```{r setup, include=FALSE, warning=TRUE, message=FALSE, echo=FALSE}
 library(ggplot2)
 library(reshape2)
-library(showtext)
+library(scales)
 library(RMySQL)
 
 set.seed(2)
 
-# 中文字体:
-showtext_auto()
-
-font_path <- '/usr/share/fonts/wumch/simsun.ttc'
-font_name <- tools::file_path_sans_ext(basename(font_path))
-font_name <- 'SimSun'
-font.add(font_name, font_path)
-# 修改坐标轴和legend、标题的字体
-theme_set(theme_light() + theme(axis.text.x=element_text(angle=90)))
-# 修改geom_text的字体
-geom_text(family=font_name)
-
-theme_set(theme_light() + theme(text=element_text(family='SimSun'), axis.text.x=element_text(angle=90)))
-
-theme(text=element_text(family=font_name), axis.text.x=element_text(angle = 90))
-# 或者
-theme_bw(base_family=font_name)
-# 修改geom_text的字体
-geom_text(family=font_name)
+theme_set(theme_light() + theme(text=element_text(family='wqy-microhei')))
 
 # ssh -gfCN -L3307:10.66.236.238:3306 wumch@119.29.236.246
 db_con <- dbConnect(MySQL(), host="127.0.0.1", port=3307, dbname="evaluate", user="eva_dev", password="memuu@2101")
@@ -41,51 +23,105 @@ db_con <- dbConnect(MySQL(), host="127.0.0.1", port=3307, dbname="evaluate", use
 ## 统计趋势
 
 ##### 订单量走势
-```{r, include=TRUE, warning=FALSE, message=FALSE, echo=FALSE, dpi=800}
+```{r, include=TRUE, warning=FALSE, message=FALSE, echo=FALSE}
 sql <- "
 select
-    date_format(from_unixtime(ut.join_time), '%m-%d') as `date`,
-    count(*) as `applied`,
-    sum(ut.status=1) as `canceled`,
-    sum(ut.status in (2,3,4)) as `submitted`,
-    sum(ut.status=3) as `done`,
-    sum(ut.status=4) as `rejected`
+    date(from_unixtime(ut.join_time)) as `日期`,
+    count(*) as `报名`,
+    sum(ut.status=1) as `取消报名`,
+    sum(ut.status in (2,3,4)) as `已提交`,
+    sum(ut.status=3) as `完成`,
+    sum(ut.status=4) as `审核不通过`
 from eva_user_task ut
 where join_time is not null and join_time between 1567008000 and unix_timestamp(date_format(now(), '%Y-%m-%d'))-1
 group by date(from_unixtime(ut.join_time))
+order by `日期` asc
 "
 db_resh <- dbSendQuery(db_con, sql)
 orders <- dbFetch(db_resh, n=-1)
-orders_flatten <- melt(orders, id="date")
-ggplot(orders_flatten, aes(x=date, y=value, colour=variable, group=variable)) + 
+orders_flatten <- melt(orders, id="日期")
+orders_flatten$日期 <- as.Date(orders_flatten$日期, '%Y-%m-%d')
+ggplot(orders_flatten, aes(x=日期, y=value, colour=variable, group=variable)) +
   geom_line() + 
   geom_point(size=1) + 
-  labs(y='order count', x='submit date', title='trends of order count', colour='legend') +
-  theme(plot.title=element_text(hjust=0.5), text=element_text(size=11))
+  labs(y='订单量', x='报名日期', title='任务订单量趋势', colour='图例') +
+  theme(plot.title=element_text(hjust=0.5), text=element_text(size=11)) +
+  scale_x_date(date_breaks='7 days', labels=date_format('%m-%d'))
 ```
 
 ##### 参与用户数趋势
-```{r, include=TRUE, warning=FALSE, message=FALSE, echo=FALSE, dpi=400}
+```{r, include=TRUE, warning=FALSE, message=FALSE, echo=FALSE}
 sql <- "
 select
-    date_format(from_unixtime(ut.join_time), '%m-%d') as `日期`,
+    date(from_unixtime(ut.join_time)) as `日期`,
     count(distinct user_id) as `报名`,
     count(distinct if(ut.status=1, user_id, null)) as `取消报名`,
-    count(distinct if(ut.status in (2,3,4), user_id, null)) as `提交`,
+    count(distinct if(ut.status in (2,3,4), user_id, null)) as `已提交`,
     count(distinct if(ut.status=3, user_id, null)) as `完成`,
-    count(distinct if(ut.status=4, user_id, null)) as `审核未通过`
+    count(distinct if(ut.status=4, user_id, null)) as `审核不通过`
 from eva_user_task ut
 where join_time is not null and join_time between 1567008000 and unix_timestamp(date_format(now(), '%Y-%m-%d'))-1
 group by date(from_unixtime(ut.join_time))
+order by `日期` asc
 "
 db_resh <- dbSendQuery(db_con, sql)
 users <- dbFetch(db_resh, n=-1)
 users_flatten <- melt(users, id="日期")
+users_flatten$日期 <- as.Date(users_flatten$日期, '%Y-%m-%d')
 ggplot(users_flatten, aes(x=日期, y=value, colour=variable, group=variable)) + 
   geom_line() + 
   geom_point(size=1) + 
-  labs(y='用户数', x='报名日期', title='参与用户数趋势', colour='图例') +
-  theme(plot.title=element_text(hjust=0.5), text=element_text(size=12))
+  labs(y='任务用户数', x='报名日期', title='任务用户数趋势', colour='图例') +
+  theme(plot.title=element_text(hjust=0.5)) +
+  scale_x_date(date_breaks='7 days', labels=date_format('%m-%d'))
+```
+
+```{r, include=TRUE, warning=FALSE, message=FALSE, echo=FALSE}
+sql <- "
+select `日期`, `添加订单客户数`, `添加订单数`,
+    cast(`app订单数` / `添加订单数` * 100 as decimal(5,2)) as `app订单占比`,
+   `提交订单客户数`, `提交订单数`, `有效已评客户数`, `有效已评订单数`,
+   `已评订单数`, cast(`已评订单数` / `提交订单数` * 100 as decimal(5, 2)) as '已评率',
+   `机器人已评`, `未自动找到`,
+   `自动找到`, cast(`自动找到` / `提交订单数` * 100 as decimal(5, 2)) as '自动找到率',
+   `掉图`, cast(`掉图` / `自动找到` * 100 as decimal(5, 2)) as `掉图率`,
+    `后台上图`, cast(`后台上图` / (`自动找到` + `后台上图`) * 100 as decimal(5, 2)) as `后台上图率`,
+    `客户上图`, cast(`客户上图` / (`自动找到` + `客户上图`) * 100 as decimal(5, 2)) as `客户上图率`,
+    `人工已评`, cast(`人工已评` / (`自动找到` + `后台上图`) * 100 as decimal(5, 2)) as `人工已评率`
+from (
+    select
+        date(make_time) as `日期`,
+        count(distinct tenant_uid) as `添加订单客户数`,
+        count(*) as `添加订单数`,
+        sum(is_app=1) as `app订单数`,
+        count(distinct if(charge_status!=0, tenant_uid, 0)) - 1 as `提交订单客户数`,
+        sum(charge_status!=0) `提交订单数`,
+        count(distinct if(charge_status in (2,3), tenant_uid, 0)) - 1 as `有效已评客户数`,
+        sum(charge_status in (2,3)) as `有效已评订单数`,
+        sum(charge_status not in (0, 1)) as `已评订单数`,
+        sum(charge_status not in (0, 1) and kind=1) as `机器人已评`,
+        sum(taobao_eva_id is null) `未自动找到`,
+        sum(taobao_eva_id is not null) as `自动找到`,
+        sum(taobao_eva_id is null and charge_status not in (0, 1) and effect is not null and effect!='') as `后台上图`,
+        sum(taobao_eva_id is null and charge_status not in (0, 1) and upload_imgs is not null and upload_imgs!='') as `客户上图`,
+        sum(taobao_eva_id is null and charge_status not in (0, 1) and (effect is null or effect='')) as `人工已评`,
+        sum(is_drop_graph) as `掉图`
+    from eva_evaluate
+    where make_time between date_sub(now(), interval 30 day) and date(now())
+    group by date(make_time)
+    order by `日期` asc
+) as `t`
+"
+db_resh <- dbSendQuery(db_con, sql)
+stats <- dbFetch(db_resh, n=-1)
+stats_flatten <- melt(stats, id="日期")
+stats_flatten$日期 <- as.Date(stats_flatten$日期, '%Y-%m-%d')
+ggplot(stats_flatten, aes(x=日期, y=value, colour=variable, group=variable)) +
+  geom_line() + 
+  geom_point(size=1) + 
+  labs(y='订单量', x='报名日期', title='任务订单量趋势', colour='图例') +
+  theme(plot.title=element_text(hjust=0.5), text=element_text(size=11)) +
+  scale_x_date(date_breaks='7 days', labels=date_format('%m-%d'))
 ```
 
 ##### 报名率影响因素

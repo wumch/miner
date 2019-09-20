@@ -102,3 +102,9 @@ ENV/
 
 .*
 .Rproj.user
+
+*.pdf
+*.png
+*.jpg
+*.jpeg
+
